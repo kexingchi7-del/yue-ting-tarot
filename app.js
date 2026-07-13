@@ -180,6 +180,8 @@ function showRitual() {
   for (let i = 0; i < 18; i++) {
     const particle = document.createElement("div");
     particle.className = "ritual-particle";
+    if (i % 3 === 0) particle.classList.add("ritual-particle--red");
+    if (i % 4 === 0) particle.classList.add("ritual-particle--light");
     particle.style.left = `${10 + Math.random() * 80}%`;
     particle.style.bottom = "0";
     particle.style.animationDelay = `${Math.random() * 1.8}s`;
@@ -290,9 +292,11 @@ function createCard(card, index) {
   const backMark = document.createElement("div");
   backMark.className = "tarot-card__back-mark";
   backMark.textContent = getCardGlyph(card);
+  const backInner = document.createElement("div");
+  backInner.className = "tarot-card__back-inner";
   const backPattern = document.createElement("div");
   backPattern.className = "tarot-card__back-pattern";
-  back.append(backMark, backPattern);
+  back.append(backMark, backInner, backPattern);
 
   /* 正面 */
   const front = document.createElement("div");
@@ -486,11 +490,11 @@ function showToast(message) {
 }
 
 function getCardGlyph(card) {
-  if (card.suit === "大阿尔卡那") return "✦";
-  if (card.suit === "权杖") return "♨";
-  if (card.suit === "圣杯") return "☽";
-  if (card.suit === "宝剑") return "◇";
-  return "✧";
+  if (card.suit === "大阿尔卡那") return "玄";
+  if (card.suit === "权杖") return "炎";
+  if (card.suit === "圣杯") return "月";
+  if (card.suit === "宝剑") return "刃";
+  return "灵";
 }
 
 function getTodayInputValue() {
@@ -513,8 +517,8 @@ function createShareImage(reading) {
   const ctx = canvas.getContext("2d");
 
   drawShareBackground(ctx, width, height);
-  drawWrappedText(ctx, "月庭塔罗", 72, 100, 56, 760, "#f8efe0", 1.15, "800");
-  drawWrappedText(ctx, "TAROT ORACLE", 74, 164, 20, 760, "#d8b76a", 1.2, "700");
+  drawWrappedText(ctx, "月庭塔罗", 72, 100, 56, 760, "#faf3e6", 1.15, "800");
+  drawWrappedText(ctx, "TAROT ORACLE", 74, 164, 20, 760, "#c43a3a", 1.2, "700");
   const question = reading.question || "此刻我最需要看见什么？";
   const spreadName = reading.spread?.name || "塔罗牌阵";
   const focus = reading.focus || "综合指引";
@@ -522,8 +526,8 @@ function createShareImage(reading) {
   const summary = reading.summary || "本次牌面提醒你，先安静看见当下真正重要的讯息。";
   const actionPlan = reading.actionPlan?.length ? reading.actionPlan : [reading.advice].filter(Boolean);
 
-  drawWrappedText(ctx, `问题：${question}`, 72, 240, 30, 880, "#f8efe0", 1.45, "700");
-  drawWrappedText(ctx, `${spreadName} · ${focus}${zodiac} · ${reading.questionType?.type || "自我状态"}`, 72, 320, 24, 880, "#cbbda7", 1.45, "500");
+  drawWrappedText(ctx, `问题：${question}`, 72, 240, 30, 880, "#f5efe0", 1.45, "700");
+  drawWrappedText(ctx, `${spreadName} · ${focus}${zodiac} · ${reading.questionType?.type || "自我状态"}`, 72, 320, 24, 880, "#bfb4a0", 1.45, "500");
 
   reading.cards.forEach((card, index) => {
     drawShareCard(ctx, card, 72 + index * 245, 405);
@@ -532,27 +536,27 @@ function createShareImage(reading) {
   const summaryY = reading.cards.length > 1 ? 770 : 720;
   const zodiacGuidance = reading.zodiac?.guidance;
   const contentY = zodiacGuidance
-    ? drawWrappedText(ctx, `星座共鸣：${zodiacGuidance}`, 72, summaryY, 25, 880, "#d8b76a", 1.5, "500") + 32
+    ? drawWrappedText(ctx, `星座共鸣：${zodiacGuidance}`, 72, summaryY, 25, 880, "#c9a96e", 1.5, "500") + 32
     : summaryY;
-  drawWrappedText(ctx, "核心解读", 72, contentY, 30, 880, "#d8b76a", 1.35, "700");
-  const afterSummary = drawWrappedText(ctx, summary, 72, contentY + 58, 30, 880, "#f8efe0", 1.65, "500");
-  drawWrappedText(ctx, "行动方案", 72, afterSummary + 34, 30, 880, "#d8b76a", 1.35, "700");
+  drawWrappedText(ctx, "核心解读", 72, contentY, 30, 880, "#c9a96e", 1.35, "700");
+  const afterSummary = drawWrappedText(ctx, summary, 72, contentY + 58, 30, 880, "#f5efe0", 1.65, "500");
+  drawWrappedText(ctx, "行动方案", 72, afterSummary + 34, 30, 880, "#c9a96e", 1.35, "700");
   const actionText = actionPlan.map((item, index) => `${index + 1}. ${item}`).join("\n") || "给自己一点空间，先观察，再决定下一步。";
-  const afterActions = drawWrappedText(ctx, actionText, 72, afterSummary + 92, 28, 880, "#f8efe0", 1.6, "500");
-  drawWrappedText(ctx, reading.disclaimer || "塔罗解读仅作自我觉察与娱乐参考。", 72, Math.min(afterActions + 64, 1480), 22, 880, "#cbbda7", 1.45, "500");
+  const afterActions = drawWrappedText(ctx, actionText, 72, afterSummary + 92, 28, 880, "#f5efe0", 1.6, "500");
+  drawWrappedText(ctx, reading.disclaimer || "塔罗解读仅作自我觉察与娱乐参考。", 72, Math.min(afterActions + 64, 1480), 22, 880, "#bfb4a0", 1.45, "500");
 
   return canvas.toDataURL("image/png");
 }
 
 function drawShareBackground(ctx, width, height) {
   const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, "#101014");
-  gradient.addColorStop(0.55, "#251a26");
-  gradient.addColorStop(1, "#0e2428");
+  gradient.addColorStop(0, "#120e0a");
+  gradient.addColorStop(0.55, "#1c1210");
+  gradient.addColorStop(1, "#180e0c");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = "rgba(216, 183, 106, 0.08)";
+  ctx.fillStyle = "rgba(201, 169, 110, 0.06)";
   for (let index = 0; index < 120; index += 1) {
     const x = secureRandom() * width;
     const y = secureRandom() * height;
@@ -560,21 +564,30 @@ function drawShareBackground(ctx, width, height) {
     ctx.arc(x, y, secureRandom() * 2 + 0.7, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  ctx.fillStyle = "rgba(196, 58, 58, 0.04)";
+  for (let index = 0; index < 40; index += 1) {
+    const x = secureRandom() * width;
+    const y = secureRandom() * height;
+    ctx.beginPath();
+    ctx.arc(x, y, secureRandom() * 1.5 + 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function drawShareCard(ctx, card, x, y) {
   const cardWidth = 210;
   const cardHeight = 300;
-  ctx.fillStyle = "rgba(18, 16, 20, 0.82)";
-  ctx.strokeStyle = "rgba(216, 183, 106, 0.55)";
+  ctx.fillStyle = "rgba(22, 14, 12, 0.85)";
+  ctx.strokeStyle = "rgba(201, 169, 110, 0.5)";
   roundRect(ctx, x, y, cardWidth, cardHeight, 18);
   ctx.fill();
   ctx.stroke();
 
-  drawWrappedText(ctx, card.position, x + 22, y + 34, 20, cardWidth - 44, "#cbbda7", 1.2, "500");
-  drawWrappedText(ctx, getCardGlyph(card), x + 78, y + 112, 56, cardWidth - 44, "#d8b76a", 1.2, "700");
-  drawWrappedText(ctx, card.name, x + 22, y + 204, 28, cardWidth - 44, "#f8efe0", 1.2, "800");
-  drawWrappedText(ctx, card.orientation, x + 22, y + 250, 20, cardWidth - 44, card.orientation === "逆位" ? "#d78b86" : "#79b7ad", 1.2, "700");
+  drawWrappedText(ctx, card.position, x + 22, y + 34, 20, cardWidth - 44, "#bfb4a0", 1.2, "500");
+  drawWrappedText(ctx, getCardGlyph(card), x + 78, y + 112, 56, cardWidth - 44, "#c9a96e", 1.2, "700");
+  drawWrappedText(ctx, card.name, x + 22, y + 204, 28, cardWidth - 44, "#f5efe0", 1.2, "800");
+  drawWrappedText(ctx, card.orientation, x + 22, y + 250, 20, cardWidth - 44, card.orientation === "逆位" ? "#c43a3a" : "#6b9080", 1.2, "700");
 }
 
 function drawWrappedText(ctx, text, x, y, size, maxWidth, color, lineHeight = 1.4, weight = "500") {
