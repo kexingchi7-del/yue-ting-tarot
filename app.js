@@ -1,10 +1,15 @@
-import { drawReading, formatReading, getZodiacIdByBirthDate, spreads, zodiacSigns } from "./tarot-core.mjs";
+import { baziCities, drawReading, drawReadingFromCardIds, formatReading, getZodiacIdByBirthDate, shuffleDeck, spreads, tarotDeck, zodiacSigns } from "./tarot-core.mjs";
 
 const state = {
   activeSpread: "three",
   lastReading: null,
   isDrawing: false,
   revealTimers: [],
+  drawMode: "auto",
+  selectionDeck: [],
+  selectedCardIds: [],
+  selectionFilter: "all",
+  shuffleSeed: 0,
 };
 
 const elements = {
@@ -14,7 +19,15 @@ const elements = {
   zodiac: document.querySelector("[data-zodiac]"),
   birthDate: document.querySelector("[data-birth-date]"),
   targetDate: document.querySelector("[data-target-date]"),
+  birthTime: document.querySelector("[data-birth-time]"),
+  birthCity: document.querySelector("[data-birth-city]"),
   spreadButtons: [...document.querySelectorAll("[data-spread]")],
+  drawModeButtons: [...document.querySelectorAll("[data-draw-mode]")],
+  manualPicker: document.querySelector("[data-manual-picker]"),
+  selectionStatus: document.querySelector("[data-selection-status]"),
+  selectionDeck: document.querySelector("[data-selection-deck]"),
+  selectionFilter: document.querySelector("[data-selection-filter]"),
+  reshuffle: document.querySelector("[data-reshuffle]"),
   drawButton: document.querySelector("[data-draw]"),
   reading: document.querySelector("[data-reading]"),
   cards: document.querySelector("[data-cards]"),
@@ -22,6 +35,7 @@ const elements = {
   history: document.querySelector("[data-history]"),
   share: document.querySelector("[data-share]"),
   clear: document.querySelector("[data-clear]"),
+  toggleHistory: document.querySelector("[data-toggle-history]"),
   redraw: document.querySelector("[data-redraw]"),
   daily: document.querySelector("[data-daily]"),
   saveImage: document.querySelector("[data-save-image]"),
@@ -33,13 +47,18 @@ const historyKey = "tarot-readings-v1";
 
 function init() {
   renderZodiacOptions();
+  renderBirthCityOptions();
   elements.targetDate.value = getTodayInputValue();
   renderSpreadButtons();
   renderHistory(loadHistory());
   elements.form.addEventListener("submit", handleSubmit);
   elements.spreadButtons.forEach((button) => button.addEventListener("click", handleSpreadClick));
+  elements.drawModeButtons.forEach((button) => button.addEventListener("click", handleDrawModeClick));
+  elements.reshuffle.addEventListener("click", prepareManualSelection);
+  elements.selectionFilter.addEventListener("click", handleFilterClick);
   elements.share.addEventListener("click", handleShare);
   elements.clear.addEventListener("click", handleClear);
+  elements.toggleHistory.addEventListener("click", handleToggleHistory);
   elements.redraw.addEventListener("click", handleRedraw);
   elements.daily.addEventListener("click", handleDaily);
   elements.saveImage.addEventListener("click", handleSaveImage);
@@ -60,6 +79,15 @@ function createZodiacOption(sign) {
   return option;
 }
 
+function renderBirthCityOptions() {
+  elements.birthCity.append(...baziCities.map((city) => {
+    const option = document.createElement("option");
+    option.value = city.id;
+    option.textContent = `${city.name} · 东经 ${city.longitude}`;
+    return option;
+  }));
+}
+
 function handleBirthDateChange() {
   const zodiacId = getZodiacIdByBirthDate(elements.birthDate.value);
   if (zodiacId) elements.zodiac.value = zodiacId;
@@ -70,9 +98,110 @@ function handleSpreadClick(event) {
   renderSpreadButtons();
 }
 
+function handleDrawModeClick(event) {
+  state.drawMode = event.currentTarget.dataset.drawMode;
+  elements.drawModeButtons.forEach((button) => {
+    const selected = button.dataset.drawMode === state.drawMode;
+    button.classList.toggle("is-active", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+  if (state.drawMode === "auto") elements.manualPicker.hidden = true;
+}
+
 function handleSubmit(event) {
   event.preventDefault();
+  if (state.drawMode === "manual") {
+    prepareManualSelection();
+    return;
+  }
   startReading();
+}
+
+function computeCardScatter(shuffleSeed, cardId) {
+  const key = `${shuffleSeed}-${cardId}`;
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
+  }
+  const rotate = ((Math.abs(hash) % 600) / 100) - 3;
+  const offsetY = ((Math.abs(hash * 7) % 800) / 100) - 4;
+  return { rotate: Number(rotate.toFixed(1)), offsetY: Number(offsetY.toFixed(1)) };
+}
+
+function prepareManualSelection() {
+  if (state.isDrawing) return;
+  state.selectionDeck = shuffleDeck(tarotDeck, secureRandom);
+  state.selectedCardIds = [];
+  state.selectionFilter = "all";
+  state.shuffleSeed = Date.now();
+  elements.manualPicker.hidden = false;
+  showToast("正在发牌...");
+  renderFilterButtons();
+  renderSelectionDeck({ animate: true });
+  elements.manualPicker.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderSelectionDeck({ animate = false } = {}) {
+  const count = spreads[state.activeSpread].count;
+  const filteredDeck = state.selectionFilter === "all"
+    ? state.selectionDeck
+    : state.selectionDeck.filter((card) => card.suit === state.selectionFilter);
+  const total = filteredDeck.length;
+
+  elements.selectionStatus.textContent = `请凭直觉从 ${total} 张牌中选择 ${count} 张（已选 ${state.selectedCardIds.length}/${count}）`;
+
+  elements.selectionDeck.replaceChildren(...filteredDeck.map((card, index) => {
+    const scatter = computeCardScatter(state.shuffleSeed, card.id);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "selection-card";
+    button.style.setProperty("--rotate", `${scatter.rotate}deg`);
+    button.style.setProperty("--offset-y", `${scatter.offsetY}px`);
+    if (animate) {
+      button.classList.add("selection-card--dealing");
+      button.style.setProperty("--deal-index", String(index));
+    }
+    button.textContent = getCardGlyph(card);
+    button.setAttribute("aria-label", `选择第 ${index + 1} 张牌：${card.name}`);
+    button.disabled = state.selectedCardIds.includes(card.id) || state.selectedCardIds.length >= count;
+    button.addEventListener("click", () => selectManualCard(card.id));
+    return button;
+  }));
+}
+
+function renderFilterButtons() {
+  const filters = [
+    { value: "all", label: "全部" },
+    { value: "大阿尔卡那", label: "大阿尔卡那" },
+    { value: "权杖", label: "权杖" },
+    { value: "圣杯", label: "圣杯" },
+    { value: "宝剑", label: "宝剑" },
+    { value: "星币", label: "星币" },
+  ];
+  elements.selectionFilter.replaceChildren(...filters.map((f) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "filter-chip";
+    if (f.value === state.selectionFilter) btn.classList.add("is-active");
+    btn.dataset.filter = f.value;
+    btn.textContent = f.label;
+    return btn;
+  }));
+}
+
+function handleFilterClick(event) {
+  const chip = event.target.closest(".filter-chip");
+  if (!chip) return;
+  state.selectionFilter = chip.dataset.filter;
+  renderFilterButtons();
+  renderSelectionDeck({ animate: true });
+}
+
+function selectManualCard(cardId) {
+  const count = spreads[state.activeSpread].count;
+  state.selectedCardIds = [...state.selectedCardIds, cardId];
+  renderSelectionDeck();
+  if (state.selectedCardIds.length === count) startManualReading();
 }
 
 function handleShare() {
@@ -91,6 +220,13 @@ function handleShare() {
   }
 
   showToast("当前浏览器不支持一键复制。");
+}
+
+function handleToggleHistory() {
+  const panel = document.querySelector(".history-panel");
+  const collapsed = panel.classList.toggle("history-panel--collapsed");
+  elements.toggleHistory.textContent = collapsed ? "展开" : "收起";
+  elements.toggleHistory.setAttribute("aria-expanded", String(!collapsed));
 }
 
 function handleClear() {
@@ -142,6 +278,8 @@ function startReading({ scrollToTop = false } = {}) {
       focus: elements.focus.value,
       zodiacId: elements.zodiac.value,
       birthDate: elements.birthDate.value,
+      birthTime: elements.birthTime.value,
+      cityId: elements.birthCity.value,
       date: elements.targetDate.value,
       spreadId: state.activeSpread,
       random: secureRandom,
@@ -156,11 +294,39 @@ function startReading({ scrollToTop = false } = {}) {
   }, 2200);
 }
 
+function startManualReading() {
+  if (state.isDrawing) return;
+  setBusy(true);
+  showRitual();
+  window.setTimeout(() => {
+    const reading = drawReadingFromCardIds({
+      cardIds: state.selectedCardIds,
+      question: elements.question.value,
+      focus: elements.focus.value,
+      zodiacId: elements.zodiac.value,
+      birthDate: elements.birthDate.value,
+      birthTime: elements.birthTime.value,
+      cityId: elements.birthCity.value,
+      date: elements.targetDate.value,
+      spreadId: state.activeSpread,
+      random: secureRandom,
+    });
+    state.lastReading = reading;
+    hideRitual();
+    elements.manualPicker.hidden = true;
+    renderReading(reading, { animate: true });
+    saveReading(reading);
+    setBusy(false);
+  }, 1300);
+}
+
 function showRitual() {
   elements.ritual.hidden = false;
   const container = document.querySelector("[data-ritual-cards]");
   const particleContainer = document.querySelector("[data-ritual-particles]");
   const strongEl = elements.ritual.querySelector("strong");
+  const innerEl = document.querySelector(".ritual__inner");
+  const spanEl = innerEl.querySelector("span");
   container.replaceChildren();
 
   const zodiacId = elements.zodiac.value;
@@ -171,21 +337,27 @@ function showRitual() {
     strongEl.textContent = "正在连接你的能量...";
   }
 
-  for (let i = 0; i < 7; i++) {
+  spanEl.textContent = "请在心里默念问题";
+
+  for (let i = 0; i < 15; i++) {
     const card = document.createElement("div");
     card.className = "ritual-card";
+    card.style.setProperty("--ritual-index", String(i));
+    card.style.setProperty("--ritual-drift", `${(i - 7) * 18}px`);
+    card.style.setProperty("--ritual-drift-y", `${Math.abs(i - 7) * -5}px`);
+    card.style.setProperty("--ritual-rotate", `${(i - 7) * 3}deg`);
     container.append(card);
   }
 
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 24; i++) {
     const particle = document.createElement("div");
     particle.className = "ritual-particle";
     if (i % 3 === 0) particle.classList.add("ritual-particle--red");
     if (i % 4 === 0) particle.classList.add("ritual-particle--light");
-    particle.style.left = `${10 + Math.random() * 80}%`;
+    particle.style.left = `${8 + Math.random() * 84}%`;
     particle.style.bottom = "0";
-    particle.style.animationDelay = `${Math.random() * 1.8}s`;
-    particle.style.width = `${2 + Math.random() * 3}px`;
+    particle.style.animationDelay = `${Math.random() * 2.2}s`;
+    particle.style.width = `${2 + Math.random() * 4}px`;
     particle.style.height = particle.style.width;
     particleContainer.append(particle);
   }
@@ -214,6 +386,7 @@ function renderReading(reading, { animate = true } = {}) {
   elements.summary.replaceChildren(
     createZodiacSection(reading.zodiac),
     createDayGuideSection(reading.dayGuide),
+    createBaziSection(reading.bazi),
     createReadingSection("整体判断", [reading.summary, reading.energy?.detail].filter(Boolean)),
     createInsightList(reading.insights || []),
     createActionList(reading.actionPlan || []),
@@ -235,6 +408,26 @@ function renderReading(reading, { animate = true } = {}) {
     }, 500 + index * 420);
     state.revealTimers = [...state.revealTimers, timer];
   });
+}
+
+function createBaziSection(bazi) {
+  if (!bazi) return document.createDocumentFragment();
+
+  const section = document.createElement("section");
+  section.className = "bazi-reading";
+  const header = document.createElement("div");
+  const heading = document.createElement("h3");
+  heading.textContent = "时辰与牌面";
+  const badge = document.createElement("strong");
+  badge.textContent = `${bazi.branch.name} · ${bazi.branch.element}`;
+  header.append(heading, badge);
+  const solar = document.createElement("span");
+  const direction = bazi.solarTime.offsetMinutes >= 0 ? "+" : "";
+  solar.textContent = `${bazi.city.name}经度校正 · ${bazi.solarTime.formatted}（${direction}${bazi.solarTime.offsetMinutes} 分钟）`;
+  const note = document.createElement("small");
+  note.textContent = bazi.note;
+  section.append(header, solar, paragraph(bazi.summary), paragraph(bazi.tarotBridge), note);
+  return section;
 }
 
 function createDayGuideSection(dayGuide) {
@@ -424,7 +617,14 @@ function createHistoryItem(reading) {
   button.addEventListener("click", () => {
     state.lastReading = reading;
     renderReading(reading, { animate: false });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const panel = document.querySelector(".history-panel");
+    panel.classList.add("history-panel--collapsed");
+    elements.toggleHistory.textContent = "展开";
+    elements.toggleHistory.setAttribute("aria-expanded", "false");
+    const readingHeading = elements.reading.querySelector("h1");
+    readingHeading?.setAttribute("tabindex", "-1");
+    readingHeading?.focus({ preventScroll: true });
+    elements.reading.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   const title = document.createElement("strong");

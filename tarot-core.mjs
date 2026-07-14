@@ -74,6 +74,28 @@ const focusDayActions = {
 
 const dayCautions = ["冲动承诺", "把焦虑当作事实", "在信息不完整时做大额决定", "为了取悦他人而压缩自己的边界", "一次安排过多目标", "反复拖延已经能开始的小事"];
 
+export const baziCities = [
+  { id: "beijing", name: "北京", longitude: 116.4074 },
+  { id: "shanghai", name: "上海", longitude: 121.4737 },
+  { id: "guangzhou", name: "广州", longitude: 113.2644 },
+  { id: "shenzhen", name: "深圳", longitude: 114.0579 },
+  { id: "hangzhou", name: "杭州", longitude: 120.1551 },
+  { id: "wuhan", name: "武汉", longitude: 114.3054 },
+  { id: "chengdu", name: "成都", longitude: 104.0665 },
+  { id: "xian", name: "西安", longitude: 108.9398 },
+  { id: "urumqi", name: "乌鲁木齐", longitude: 87.6168 },
+  { id: "harbin", name: "哈尔滨", longitude: 126.535 },
+];
+
+const earthlyBranches = [
+  { name: "子时", element: "水", quality: "静中生机" }, { name: "丑时", element: "土", quality: "沉稳蓄力" },
+  { name: "寅时", element: "木", quality: "破晓行动" }, { name: "卯时", element: "木", quality: "舒展生发" },
+  { name: "辰时", element: "土", quality: "收束成形" }, { name: "巳时", element: "火", quality: "灵感显现" },
+  { name: "午时", element: "火", quality: "明朗推进" }, { name: "未时", element: "土", quality: "安放整合" },
+  { name: "申时", element: "金", quality: "理性收获" }, { name: "酉时", element: "金", quality: "精炼判断" },
+  { name: "戌时", element: "土", quality: "守成归纳" }, { name: "亥时", element: "水", quality: "回望滋养" },
+];
+
 export function getZodiacIdByBirthDate(birthDate) {
   const parsed = parseIsoDate(birthDate);
   if (!parsed) return "";
@@ -117,6 +139,34 @@ export function buildDayGuide({ birthDate, zodiacId = "", date = getLocalDateStr
     caution,
     rhythm: weekdayGuides[new Date(Date.UTC(target.year, target.month - 1, target.day)).getUTCDay()],
     note: "这是结合生日星座、日期节律与主题生成的择日参考，适合用来安排节奏，不替代传统黄历或专业决策。",
+  };
+}
+
+export function getEarthlyBranch(time) {
+  const parsed = parseTime(time);
+  if (!parsed) return null;
+  const totalMinutes = parsed.hour * 60 + parsed.minute;
+  return earthlyBranches[Math.floor(((totalMinutes + 60) % 1_440) / 120)];
+}
+
+export function buildBaziProfile({ birthDate, birthTime, cityId = "beijing" } = {}) {
+  const birth = parseIsoDate(birthDate);
+  const time = parseTime(birthTime);
+  const city = baziCities.find((item) => item.id === cityId) || baziCities[0];
+  if (!birth || !time) return null;
+
+  const offsetMinutes = Math.round((city.longitude - 120) * 4);
+  const rawMinutes = time.hour * 60 + time.minute + offsetMinutes;
+  const adjustedMinutes = ((rawMinutes % 1_440) + 1_440) % 1_440;
+  const solarTime = `${String(Math.floor(adjustedMinutes / 60)).padStart(2, "0")}:${String(adjustedMinutes % 60).padStart(2, "0")}`;
+  const branch = getEarthlyBranch(solarTime);
+
+  return {
+    city,
+    branch,
+    solarTime: { formatted: solarTime, offsetMinutes, dayShift: rawMinutes < 0 ? -1 : rawMinutes >= 1_440 ? 1 : 0 },
+    summary: `以${city.name}经度为参考，出生钟表时间校正为 ${solarTime}，对应${branch.name}，呈现「${branch.quality}」的时辰气质。`,
+    note: "当前为经度校正估算，不含均时差、夏令时、节气月与四柱干支换算；用于自我探索，不作为专业排盘结论。",
   };
 }
 
@@ -358,7 +408,7 @@ export function shuffleDeck(deck, random = Math.random) {
     .map(({ card }) => ({ ...card }));
 }
 
-export function drawReading({ question = "", focus = "综合", spreadId = "three", zodiacId = "", birthDate = "", date = getLocalDateString(), random = Math.random } = {}) {
+export function drawReading({ question = "", focus = "综合", spreadId = "three", zodiacId = "", birthDate = "", birthTime = "", cityId = "beijing", date = getLocalDateString(), random = Math.random } = {}) {
   const spread = getSpread(spreadId);
   const normalizedQuestion = normalizeQuestion(question);
   const questionType = detectQuestionType(normalizedQuestion, focus);
@@ -380,6 +430,10 @@ export function drawReading({ question = "", focus = "综合", spreadId = "three
   const energy = buildEnergy(cards);
   const zodiac = buildZodiacReading({ zodiacId: resolvedZodiacId, cards, energy });
   const dayGuide = buildDayGuide({ birthDate, zodiacId: resolvedZodiacId, date, focus });
+  const baziProfile = buildBaziProfile({ birthDate, birthTime, cityId });
+  const bazi = baziProfile
+    ? { ...baziProfile, tarotBridge: buildBaziTarotBridge({ profile: baziProfile, cards }) }
+    : null;
 
   return {
     id: createReadingId(random),
@@ -387,6 +441,7 @@ export function drawReading({ question = "", focus = "综合", spreadId = "three
     question: normalizedQuestion || "此刻最需要看见的讯息",
     focus,
     birthDate,
+    drawMode: "自动抽牌",
     questionType,
     spread,
     cards,
@@ -396,9 +451,36 @@ export function drawReading({ question = "", focus = "综合", spreadId = "three
     energy,
     zodiac,
     dayGuide,
+    bazi,
     actionPlan: buildActionPlan({ focus, cards, questionType }),
     caution: buildCaution(cards),
     disclaimer,
+  };
+}
+
+export function drawReadingFromCardIds({ cardIds = [], question = "", focus = "综合", spreadId = "three", zodiacId = "", birthDate = "", birthTime = "", cityId = "beijing", date = getLocalDateString(), random = Math.random } = {}) {
+  const spread = getSpread(spreadId);
+  const normalizedQuestion = normalizeQuestion(question);
+  const questionType = detectQuestionType(normalizedQuestion, focus);
+  const resolvedZodiacId = zodiacId || getZodiacIdByBirthDate(birthDate);
+  const selectedIds = [...new Set(cardIds)].slice(0, spread.count);
+  const selectedCards = selectedIds.map((id) => tarotDeck.find((card) => card.id === id)).filter(Boolean);
+  if (selectedCards.length !== spread.count) throw new Error("请选择与牌阵张数一致的不同牌面。");
+
+  const cards = selectedCards.map((card, index) => {
+    const orientation = random() > 0.28 ? "正位" : "逆位";
+    return { ...card, position: spread.positions[index], orientation, meaning: orientation === "正位" ? card.upright : card.reversed, keywords: buildCardKeywords(card, orientation) };
+  });
+  const energy = buildEnergy(cards);
+  const zodiac = buildZodiacReading({ zodiacId: resolvedZodiacId, cards, energy });
+  const dayGuide = buildDayGuide({ birthDate, zodiacId: resolvedZodiacId, date, focus });
+  const baziProfile = buildBaziProfile({ birthDate, birthTime, cityId });
+  const bazi = baziProfile ? { ...baziProfile, tarotBridge: buildBaziTarotBridge({ profile: baziProfile, cards }) } : null;
+
+  return {
+    id: createReadingId(random), createdAt: new Date().toISOString(), question: normalizedQuestion || "此刻最需要看见的讯息", focus, birthDate, questionType, spread, cards,
+    summary: buildSummary({ focus, cards, questionType }), advice: buildAdvice(cards), insights: buildInsights({ focus, cards, questionType }), energy, zodiac, dayGuide, bazi,
+    actionPlan: buildActionPlan({ focus, cards, questionType }), caution: buildCaution(cards), disclaimer, drawMode: "自选牌",
   };
 }
 
@@ -420,6 +502,16 @@ export function buildZodiacReading({ zodiacId, cards, energy }) {
   };
 }
 
+function buildBaziTarotBridge({ profile, cards }) {
+  const matchingCard = cards.find((card) => card.element === profile.branch.element);
+  if (matchingCard) {
+    return `你的${profile.branch.element}元素时辰与「${matchingCard.name}」形成呼应，今天可把重点放在${matchingCard.archetype}上，并用实际行动验证感受。`;
+  }
+
+  const terminalCard = cards[cards.length - 1];
+  return `时辰气质偏${profile.branch.element}，而牌面引导你关注${terminalCard.element}元素；把「${terminalCard.archetype}」当作平衡当前节奏的一种练习。`;
+}
+
 function parseIsoDate(value) {
   const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
@@ -430,6 +522,15 @@ function parseIsoDate(value) {
   const date = new Date(Date.UTC(year, month - 1, day));
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
   return { year, month, day };
+}
+
+function parseTime(value) {
+  const match = String(value || "").match(/^(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return { hour, minute };
 }
 
 function formatIsoDate({ year, month, day }) {
@@ -548,6 +649,7 @@ export function formatReading(reading) {
     `主题：${reading.focus}`,
     ...(reading.zodiac ? [`星座：${reading.zodiac.name}（${reading.zodiac.element}象）`, `星座提示：${reading.zodiac.guidance}`] : []),
     ...(reading.dayGuide ? [`宜行指数：${reading.dayGuide.score} / 95 · ${reading.dayGuide.label}`, `适合：${reading.dayGuide.suitable.join("、")}`, `慎做：${reading.dayGuide.caution}`, reading.dayGuide.note] : []),
+    ...(reading.bazi ? [`时辰档案：${reading.bazi.summary}`, `八字与牌面：${reading.bazi.tarotBridge}`, reading.bazi.note] : []),
     `问题类型：${reading.questionType?.type || "自我状态"}`,
     `牌阵：${reading.spread.name}`,
     "",

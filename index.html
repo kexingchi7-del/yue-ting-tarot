@@ -59,6 +59,17 @@
             </label>
           </div>
 
+          <div class="birth-details">
+            <label>
+              <span>出生时刻 <em>用于时辰判定</em></span>
+              <input type="time" data-birth-time />
+            </label>
+            <label>
+              <span>出生地 <em>用于经度校正</em></span>
+              <select data-birth-city aria-label="选择出生地"></select>
+            </label>
+          </div>
+
           <div class="spread-picker" aria-label="牌阵">
             <button type="button" data-spread="single">
               <div class="spread-dots" aria-hidden="true"><i></i></div>
@@ -74,11 +85,28 @@
             </button>
           </div>
 
+          <div class="draw-mode" aria-label="抽牌方式">
+            <button type="button" class="is-active" data-draw-mode="auto" aria-pressed="true">自动抽牌</button>
+            <button type="button" data-draw-mode="manual" aria-pressed="false">自选牌</button>
+          </div>
+
           <div class="action-row">
             <button class="draw-button" type="submit" data-draw>开始占卜</button>
             <button class="quick-button" type="button" data-daily>今日牌</button>
           </div>
         </form>
+      </section>
+
+      <section class="manual-picker" data-manual-picker hidden>
+        <div class="section-head">
+          <div>
+            <h2>从洗好的牌堆中选牌</h2>
+            <p data-selection-status></p>
+          </div>
+          <button type="button" data-reshuffle>重新洗牌</button>
+        </div>
+        <div class="selection-filter" data-selection-filter></div>
+        <div class="selection-deck" data-selection-deck></div>
       </section>
 
       <section class="reading-panel" data-reading hidden>
@@ -94,12 +122,15 @@
         <button class="draw-button draw-button--block" type="button" data-redraw>再抽一次</button>
       </section>
 
-      <aside class="history-panel">
+      <aside class="history-panel history-panel--collapsed">
         <div class="section-head">
           <h2>最近记录</h2>
-          <button type="button" data-clear>清空</button>
+          <div class="section-actions">
+            <button type="button" data-toggle-history aria-expanded="false" aria-controls="reading-history-list">展开</button>
+            <button type="button" data-clear>清空</button>
+          </div>
         </div>
-        <div class="history-list" data-history></div>
+        <div class="history-list" id="reading-history-list" data-history></div>
       </aside>
     </main>
 
