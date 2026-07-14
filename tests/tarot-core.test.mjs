@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import {
+  buildBaziProfile,
+  drawReadingFromCardIds,
   buildDayGuide,
   detectQuestionType,
   drawReading,
   formatReading,
   getSpread,
+  getEarthlyBranch,
   getZodiacIdByBirthDate,
   getZodiacProfile,
   normalizeQuestion,
@@ -32,6 +35,12 @@ assert.equal(getZodiacProfile("unknown"), null, "未知星座不应生成运势�
 assert.equal(getZodiacIdByBirthDate("1990-03-21"), "aries");
 assert.equal(getZodiacIdByBirthDate("1990-01-19"), "capricorn");
 assert.equal(getZodiacIdByBirthDate("invalid"), "");
+assert.equal(getEarthlyBranch("23:30").name, "子时");
+assert.equal(getEarthlyBranch("01:00").name, "丑时");
+const baziProfile = buildBaziProfile({ birthDate: "1990-03-21", birthTime: "23:30", cityId: "beijing" });
+assert.equal(baziProfile.branch.name, "子时");
+assert.equal(baziProfile.solarTime.offsetMinutes, -14);
+assert.ok(baziProfile.summary.includes("北京"));
 const dayGuide = buildDayGuide({ birthDate: "1990-03-21", date: "2026-07-10", focus: "事业" });
 assert.equal(dayGuide.date, "2026-07-10");
 assert.ok(dayGuide.score >= 35 && dayGuide.score <= 95);
@@ -45,6 +54,8 @@ const reading = drawReading({
   zodiacId: "capricorn",
   birthDate: "1990-01-19",
   date: "2026-07-10",
+  birthTime: "23:30",
+  cityId: "beijing",
   random: createRandomSequence([0.02, 0.42, 0.76, 0.11, 0.91, 0.35, 0.64, 0.21, 0.83]),
 });
 
@@ -69,9 +80,26 @@ assert.ok(reading.zodiac.guidance.includes("摩羯座"));
 assert.ok(reading.zodiac.todayTheme.length > 0);
 assert.equal(reading.dayGuide.date, "2026-07-10");
 assert.ok(reading.dayGuide.label.length > 0);
+assert.equal(reading.bazi.branch.name, "子时");
+assert.ok(reading.bazi.tarotBridge.length > 0);
 assert.ok(formatReading(reading).includes("牌阵：四象十字"));
 assert.ok(formatReading(reading).includes("星座：摩羯座"));
 assert.ok(formatReading(reading).includes("宜行指数："));
+assert.ok(formatReading(reading).includes("时辰档案："));
+
+const selectedReading = drawReadingFromCardIds({
+  cardIds: ["major-0", "权杖-1", "圣杯-2"],
+  question: "我应该如何推进这个计划？",
+  focus: "事业",
+  spreadId: "three",
+  birthDate: "1990-03-21",
+  birthTime: "23:30",
+  cityId: "beijing",
+  random: createRandomSequence([0.9, 0.1, 0.9, 0.2]),
+});
+assert.deepEqual(selectedReading.cards.map((card) => card.id), ["major-0", "权杖-1", "圣杯-2"]);
+assert.equal(selectedReading.drawMode, "自选牌");
+assert.ok(selectedReading.bazi.tarotBridge.includes("时辰"));
 assert.ok(formatReading(reading).includes("整体判断"));
 assert.ok(formatReading(reading).includes("行动方案"));
 assert.ok(formatReading(reading).includes("月庭塔罗｜我的本次牌面"));
