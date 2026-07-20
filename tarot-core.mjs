@@ -95,6 +95,7 @@ const earthlyBranches = [
   { name: "申时", element: "金", quality: "理性收获" }, { name: "酉时", element: "金", quality: "精炼判断" },
   { name: "戌时", element: "土", quality: "守成归纳" }, { name: "亥时", element: "水", quality: "回望滋养" },
 ];
+const ZHI_INDEX = Object.freeze(Object.fromEntries("子丑寅卯辰巳午未申酉戌亥".split("").map((zhi, index) => [zhi, index])));
 
 export function getZodiacIdByBirthDate(birthDate) {
   const parsed = parseIsoDate(birthDate);
@@ -149,24 +150,33 @@ export function getEarthlyBranch(time) {
   return earthlyBranches[Math.floor(((totalMinutes + 60) % 1_440) / 120)];
 }
 
-export function buildBaziProfile({ birthDate, birthTime, cityId = "beijing" } = {}) {
+export function buildBaziProfile({ birthDate, birthTime, cityId = "beijing", gender = "male", longitude, timezoneOffset = 8, daylightSavingMinutes = 0, useTrueSolarTime = true, targetYear, targetDate } = {}) {
   const birth = parseIsoDate(birthDate);
   const time = parseTime(birthTime);
   const city = baziCities.find((item) => item.id === cityId) || baziCities[0];
   if (!birth || !time) return null;
-
-  const offsetMinutes = Math.round((city.longitude - 120) * 4);
-  const rawMinutes = time.hour * 60 + time.minute + offsetMinutes;
-  const adjustedMinutes = ((rawMinutes % 1_440) + 1_440) % 1_440;
-  const solarTime = `${String(Math.floor(adjustedMinutes / 60)).padStart(2, "0")}:${String(adjustedMinutes % 60).padStart(2, "0")}`;
-  const branch = getEarthlyBranch(solarTime);
+  if (longitude !== undefined && !Number.isFinite(Number(longitude))) throw new Error("请填写有效的出生地经度。");
+  const chart = buildProfessionalBazi({
+    birthDate,
+    birthTime,
+    gender,
+    longitude: longitude === undefined ? city.longitude : Number(longitude),
+    timezoneOffset: Number(timezoneOffset),
+    daylightSavingMinutes: Number(daylightSavingMinutes),
+    useTrueSolarTime,
+    targetYear: targetYear || new Date().getFullYear(),
+    targetDate,
+  });
+  const branch = earthlyBranches[ZHI_INDEX[chart.pillars.hour.zhi]];
+  const correction = chart.time.totalCorrectionMinutes;
 
   return {
     city,
     branch,
-    solarTime: { formatted: solarTime, offsetMinutes, dayShift: rawMinutes < 0 ? -1 : rawMinutes >= 1_440 ? 1 : 0 },
-    summary: `以${city.name}经度为参考，出生钟表时间校正为 ${solarTime}，对应${branch.name}，呈现「${branch.quality}」的时辰气质。`,
-    note: "当前为经度校正估算，不含均时差、夏令时、节气月与四柱干支换算；用于自我探索，不作为专业排盘结论。",
+    solarTime: { formatted: chart.time.formatted, offsetMinutes: correction, dayShift: chart.time.dayShift },
+    chart,
+    summary: `${city.name}排盘：${chart.pillars.year.ganZhi}年、${chart.pillars.month.ganZhi}月、${chart.pillars.day.ganZhi}日、${chart.pillars.hour.ganZhi}时；${chart.conventions.timeBasis} ${chart.conventions.timeBasis === "地方真太阳时" ? chart.time.formatted : birthTime}，当前按${chart.luck.direction}起运。`,
+    note: chart.warnings.join(" "),
   };
 }
 
@@ -408,7 +418,7 @@ export function shuffleDeck(deck, random = Math.random) {
     .map(({ card }) => ({ ...card }));
 }
 
-export function drawReading({ question = "", focus = "综合", spreadId = "three", zodiacId = "", birthDate = "", birthTime = "", cityId = "beijing", date = getLocalDateString(), random = Math.random } = {}) {
+export function drawReading({ question = "", focus = "综合", spreadId = "three", zodiacId = "", birthDate = "", birthTime = "", cityId = "beijing", gender = "male", longitude, timezoneOffset = 8, daylightSavingMinutes = 0, useTrueSolarTime = true, date = getLocalDateString(), random = Math.random } = {}) {
   const spread = getSpread(spreadId);
   const normalizedQuestion = normalizeQuestion(question);
   const questionType = detectQuestionType(normalizedQuestion, focus);
@@ -430,7 +440,7 @@ export function drawReading({ question = "", focus = "综合", spreadId = "three
   const energy = buildEnergy(cards);
   const zodiac = buildZodiacReading({ zodiacId: resolvedZodiacId, cards, energy });
   const dayGuide = buildDayGuide({ birthDate, zodiacId: resolvedZodiacId, date, focus });
-  const baziProfile = buildBaziProfile({ birthDate, birthTime, cityId });
+  const baziProfile = buildBaziProfile({ birthDate, birthTime, cityId, gender, longitude, timezoneOffset, daylightSavingMinutes, useTrueSolarTime, targetYear: Number(date?.slice(0, 4)), targetDate: date });
   const bazi = baziProfile
     ? { ...baziProfile, tarotBridge: buildBaziTarotBridge({ profile: baziProfile, cards }) }
     : null;
@@ -458,7 +468,7 @@ export function drawReading({ question = "", focus = "综合", spreadId = "three
   };
 }
 
-export function drawReadingFromCardIds({ cardIds = [], question = "", focus = "综合", spreadId = "three", zodiacId = "", birthDate = "", birthTime = "", cityId = "beijing", date = getLocalDateString(), random = Math.random } = {}) {
+export function drawReadingFromCardIds({ cardIds = [], question = "", focus = "综合", spreadId = "three", zodiacId = "", birthDate = "", birthTime = "", cityId = "beijing", gender = "male", longitude, timezoneOffset = 8, daylightSavingMinutes = 0, useTrueSolarTime = true, date = getLocalDateString(), random = Math.random } = {}) {
   const spread = getSpread(spreadId);
   const normalizedQuestion = normalizeQuestion(question);
   const questionType = detectQuestionType(normalizedQuestion, focus);
@@ -474,7 +484,7 @@ export function drawReadingFromCardIds({ cardIds = [], question = "", focus = "�
   const energy = buildEnergy(cards);
   const zodiac = buildZodiacReading({ zodiacId: resolvedZodiacId, cards, energy });
   const dayGuide = buildDayGuide({ birthDate, zodiacId: resolvedZodiacId, date, focus });
-  const baziProfile = buildBaziProfile({ birthDate, birthTime, cityId });
+  const baziProfile = buildBaziProfile({ birthDate, birthTime, cityId, gender, longitude, timezoneOffset, daylightSavingMinutes, useTrueSolarTime, targetYear: Number(date?.slice(0, 4)), targetDate: date });
   const bazi = baziProfile ? { ...baziProfile, tarotBridge: buildBaziTarotBridge({ profile: baziProfile, cards }) } : null;
 
   return {
@@ -642,6 +652,14 @@ export function buildCaution(cards) {
 }
 
 export function formatReading(reading) {
+  const chart = reading.bazi?.chart;
+  const baziLines = chart ? [
+    `四柱：${chart.pillars.year.ganZhi} ${chart.pillars.month.ganZhi} ${chart.pillars.day.ganZhi} ${chart.pillars.hour.ganZhi}`,
+    `${chart.conventions.timeBasis}：${chart.conventions.timeBasis === "地方真太阳时" ? chart.time.apparentSolar : chart.time.civil}（真太阳时参考 ${chart.time.apparentSolar}）`,
+    `起运：${chart.luck.direction}，${chart.luck.startAge.years} 年 ${chart.luck.startAge.months} 月 ${chart.luck.startAge.days} 天起运`,
+    `大运：${chart.luck.daYun.map((item) => `${item.pillar} ${item.startYear}–${item.endYear}`).join("｜")}`,
+    `流年：${chart.annual.year} ${chart.annual.pillar}${chart.annual.activeDaYun ? `，行${chart.annual.activeDaYun}大运` : ""}`,
+  ] : [];
   const lines = [
     "月庭塔罗｜我的本次牌面",
     "",
@@ -649,7 +667,7 @@ export function formatReading(reading) {
     `主题：${reading.focus}`,
     ...(reading.zodiac ? [`星座：${reading.zodiac.name}（${reading.zodiac.element}象）`, `星座提示：${reading.zodiac.guidance}`] : []),
     ...(reading.dayGuide ? [`宜行指数：${reading.dayGuide.score} / 95 · ${reading.dayGuide.label}`, `适合：${reading.dayGuide.suitable.join("、")}`, `慎做：${reading.dayGuide.caution}`, reading.dayGuide.note] : []),
-    ...(reading.bazi ? [`时辰档案：${reading.bazi.summary}`, `八字与牌面：${reading.bazi.tarotBridge}`, reading.bazi.note] : []),
+    ...(reading.bazi ? [`八字档案：${reading.bazi.summary}`, ...baziLines, `八字与牌面：${reading.bazi.tarotBridge}`, reading.bazi.note] : []),
     `问题类型：${reading.questionType?.type || "自我状态"}`,
     `牌阵：${reading.spread.name}`,
     "",
@@ -685,3 +703,4 @@ function buildCardKeywords(card, orientation) {
 function createReadingId(random) {
   return `tarot-${Date.now().toString(36)}-${Math.floor(random() * 1_000_000).toString(36)}`;
 }
+import { buildProfessionalBazi } from "./bazi-core.mjs";

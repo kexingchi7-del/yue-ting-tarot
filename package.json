@@ -4,7 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/tarot-core.test.mjs",
+    "test": "c8 --include=bazi-core.mjs --include=tarot-core.mjs --check-coverage --lines 80 --functions 80 --statements 80 npm run test:unit",
+    "test:unit": "node tests/bazi-core.test.mjs && node tests/tarot-core.test.mjs",
     "start": "python3 -m http.server 4173"
+  },
+  "dependencies": {
+    "lunar-javascript": "1.7.7"
+  },
+  "devDependencies": {
+    "c8": "10.1.3"
   }
 }

@@ -61,6 +61,13 @@
 
           <div class="birth-details">
             <label>
+              <span>性别 <em>用于大运顺逆</em></span>
+              <select data-gender>
+                <option value="male">男</option>
+                <option value="female">女</option>
+              </select>
+            </label>
+            <label>
               <span>出生时刻 <em>用于时辰判定</em></span>
               <input type="time" data-birth-time />
             </label>
@@ -69,6 +76,31 @@
               <select data-birth-city aria-label="选择出生地"></select>
             </label>
           </div>
+
+          <div class="bazi-settings">
+            <label>
+              <span>出生地经度 <em>可精确修改</em></span>
+              <input type="number" min="-180" max="180" step="0.0001" data-longitude />
+            </label>
+            <label>
+              <span>出生时区</span>
+              <select data-timezone-offset>
+                <option value="8">UTC+8 中国标准时间</option>
+              </select>
+            </label>
+            <label>
+              <span>夏令时修正</span>
+              <select data-daylight-saving>
+                <option value="0">未采用 / 已还原</option>
+                <option value="60">钟表时间减 60 分钟</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="solar-time-toggle">
+            <input type="checkbox" data-true-solar-time checked />
+            <span>使用地方真太阳时排盘（经度差＋均时差）</span>
+          </label>
 
           <div class="spread-picker" aria-label="牌阵">
             <button type="button" data-spread="single">
@@ -143,6 +175,7 @@
       </div>
     </div>
     <div class="toast" data-toast hidden></div>
+    <script src="./vendor/lunar.js"></script>
     <script type="module" src="./app.js"></script>
   </body>
 </html>
