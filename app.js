@@ -21,6 +21,11 @@ const elements = {
   targetDate: document.querySelector("[data-target-date]"),
   birthTime: document.querySelector("[data-birth-time]"),
   birthCity: document.querySelector("[data-birth-city]"),
+  gender: document.querySelector("[data-gender]"),
+  longitude: document.querySelector("[data-longitude]"),
+  timezoneOffset: document.querySelector("[data-timezone-offset]"),
+  daylightSaving: document.querySelector("[data-daylight-saving]"),
+  trueSolarTime: document.querySelector("[data-true-solar-time]"),
   spreadButtons: [...document.querySelectorAll("[data-spread]")],
   drawModeButtons: [...document.querySelectorAll("[data-draw-mode]")],
   manualPicker: document.querySelector("[data-manual-picker]"),
@@ -63,6 +68,8 @@ function init() {
   elements.daily.addEventListener("click", handleDaily);
   elements.saveImage.addEventListener("click", handleSaveImage);
   elements.birthDate.addEventListener("change", handleBirthDateChange);
+  elements.birthCity.addEventListener("change", handleBirthCityChange);
+  handleBirthCityChange();
 }
 
 function renderZodiacOptions() {
@@ -91,6 +98,21 @@ function renderBirthCityOptions() {
 function handleBirthDateChange() {
   const zodiacId = getZodiacIdByBirthDate(elements.birthDate.value);
   if (zodiacId) elements.zodiac.value = zodiacId;
+}
+
+function handleBirthCityChange() {
+  const city = baziCities.find((item) => item.id === elements.birthCity.value) || baziCities[0];
+  elements.longitude.value = String(city.longitude);
+}
+
+function getBaziInput() {
+  return {
+    gender: elements.gender.value,
+    longitude: elements.longitude.value.trim() === "" ? Number.NaN : Number(elements.longitude.value),
+    timezoneOffset: Number(elements.timezoneOffset.value),
+    daylightSavingMinutes: Number(elements.daylightSaving.value),
+    useTrueSolarTime: elements.trueSolarTime.checked,
+  };
 }
 
 function handleSpreadClick(event) {
@@ -273,17 +295,26 @@ function startReading({ scrollToTop = false } = {}) {
   showRitual();
 
   window.setTimeout(() => {
-    const reading = drawReading({
-      question: elements.question.value,
-      focus: elements.focus.value,
-      zodiacId: elements.zodiac.value,
-      birthDate: elements.birthDate.value,
-      birthTime: elements.birthTime.value,
-      cityId: elements.birthCity.value,
-      date: elements.targetDate.value,
-      spreadId: state.activeSpread,
-      random: secureRandom,
-    });
+    let reading;
+    try {
+      reading = drawReading({
+        question: elements.question.value,
+        focus: elements.focus.value,
+        zodiacId: elements.zodiac.value,
+        birthDate: elements.birthDate.value,
+        birthTime: elements.birthTime.value,
+        cityId: elements.birthCity.value,
+        ...getBaziInput(),
+        date: elements.targetDate.value,
+        spreadId: state.activeSpread,
+        random: secureRandom,
+      });
+    } catch (error) {
+      hideRitual();
+      setBusy(false);
+      showToast(error instanceof Error ? error.message : "排盘失败，请检查出生资料。");
+      return;
+    }
 
     state.lastReading = reading;
     hideRitual();
@@ -299,18 +330,27 @@ function startManualReading() {
   setBusy(true);
   showRitual();
   window.setTimeout(() => {
-    const reading = drawReadingFromCardIds({
-      cardIds: state.selectedCardIds,
-      question: elements.question.value,
-      focus: elements.focus.value,
-      zodiacId: elements.zodiac.value,
-      birthDate: elements.birthDate.value,
-      birthTime: elements.birthTime.value,
-      cityId: elements.birthCity.value,
-      date: elements.targetDate.value,
-      spreadId: state.activeSpread,
-      random: secureRandom,
-    });
+    let reading;
+    try {
+      reading = drawReadingFromCardIds({
+        cardIds: state.selectedCardIds,
+        question: elements.question.value,
+        focus: elements.focus.value,
+        zodiacId: elements.zodiac.value,
+        birthDate: elements.birthDate.value,
+        birthTime: elements.birthTime.value,
+        cityId: elements.birthCity.value,
+        ...getBaziInput(),
+        date: elements.targetDate.value,
+        spreadId: state.activeSpread,
+        random: secureRandom,
+      });
+    } catch (error) {
+      hideRitual();
+      setBusy(false);
+      showToast(error instanceof Error ? error.message : "排盘失败，请检查出生资料。");
+      return;
+    }
     state.lastReading = reading;
     hideRitual();
     elements.manualPicker.hidden = true;
@@ -413,21 +453,101 @@ function renderReading(reading, { animate = true } = {}) {
 function createBaziSection(bazi) {
   if (!bazi) return document.createDocumentFragment();
 
+  if (!bazi.chart) return createLegacyBaziSection(bazi);
+
+  const section = document.createElement("section");
+  section.className = "bazi-reading";
+  const chart = bazi.chart;
+  const header = document.createElement("div");
+  const heading = document.createElement("h3");
+  heading.textContent = "专业八字排盘";
+  const badge = document.createElement("strong");
+  badge.textContent = `${chart.luck.direction} · ${chart.annual.year} ${chart.annual.pillar}流年`;
+  header.append(heading, badge);
+
+  const solar = document.createElement("span");
+  const longitudeCorrection = chart.time.longitudeCorrectionMinutes.toFixed(1);
+  const eot = chart.time.equationOfTimeMinutes.toFixed(1);
+  const total = chart.time.totalCorrectionMinutes.toFixed(1);
+  solar.textContent = chart.conventions.timeBasis === "地方真太阳时"
+    ? `钟表时 ${chart.time.civil} → 真太阳时 ${chart.time.apparentSolar}｜经度 ${longitudeCorrection} 分｜均时差 ${eot} 分｜总修正 ${total} 分`
+    : `本次按标准钟表时 ${chart.time.civil} 排盘｜真太阳时参考 ${chart.time.apparentSolar}（未用于定柱）`;
+
+  const convention = document.createElement("p");
+  convention.className = "bazi-convention";
+  convention.textContent = `${chart.conventions.yearBoundary}换年 · ${chart.conventions.monthBoundary}令换月 · ${chart.conventions.dayBoundary} · ${chart.conventions.luckRule}`;
+
+  const pillarTable = createPillarTable(chart.pillars);
+  const terms = document.createElement("p");
+  terms.className = "bazi-terms";
+  terms.textContent = `前一节：${chart.solarTerms.previousJie.name} ${chart.solarTerms.previousJie.dateTime}｜后一节：${chart.solarTerms.nextJie.name} ${chart.solarTerms.nextJie.dateTime}`;
+
+  const luckHeading = document.createElement("h4");
+  const startAge = chart.luck.startAge;
+  luckHeading.textContent = `大运｜${startAge.years} 年 ${startAge.months} 月 ${startAge.days} 天起运（${chart.luck.startDate}）`;
+  const luckTable = createLuckTable(chart.luck.daYun);
+
+  const bridge = paragraph(bazi.tarotBridge);
+  bridge.className = "bazi-bridge";
+  const note = document.createElement("small");
+  note.textContent = bazi.note;
+  section.append(header, solar, convention, pillarTable, terms, luckHeading, luckTable, bridge, note);
+  return section;
+}
+
+function createLegacyBaziSection(bazi) {
   const section = document.createElement("section");
   section.className = "bazi-reading";
   const header = document.createElement("div");
   const heading = document.createElement("h3");
-  heading.textContent = "时辰与牌面";
+  heading.textContent = "历史时辰档案";
   const badge = document.createElement("strong");
-  badge.textContent = `${bazi.branch.name} · ${bazi.branch.element}`;
+  badge.textContent = `${bazi.branch?.name || "旧记录"}${bazi.branch?.element ? ` · ${bazi.branch.element}` : ""}`;
   header.append(heading, badge);
-  const solar = document.createElement("span");
-  const direction = bazi.solarTime.offsetMinutes >= 0 ? "+" : "";
-  solar.textContent = `${bazi.city.name}经度校正 · ${bazi.solarTime.formatted}（${direction}${bazi.solarTime.offsetMinutes} 分钟）`;
   const note = document.createElement("small");
-  note.textContent = bazi.note;
-  section.append(header, solar, paragraph(bazi.summary), paragraph(bazi.tarotBridge), note);
+  note.textContent = "这是升级前保存的简化记录；重新占卜后可生成完整四柱与大运流年。";
+  section.append(header, paragraph(bazi.summary || "旧版时辰记录"), note);
   return section;
+}
+
+function createPillarTable(pillars) {
+  const labels = { year: "年柱", month: "月柱", day: "日柱", hour: "时柱" };
+  const table = document.createElement("div");
+  table.className = "bazi-pillars";
+  Object.entries(pillars).forEach(([key, item]) => {
+    const column = document.createElement("div");
+    const label = document.createElement("span");
+    label.textContent = labels[key];
+    const gan = document.createElement("strong");
+    gan.textContent = item.gan;
+    const zhi = document.createElement("b");
+    zhi.textContent = item.zhi;
+    const meta = document.createElement("small");
+    meta.textContent = `${item.tenGod} · ${item.naYin}`;
+    const hidden = document.createElement("em");
+    hidden.textContent = `藏干 ${item.hiddenStems.join("、")}`;
+    column.append(label, gan, zhi, meta, hidden);
+    table.append(column);
+  });
+  return table;
+}
+
+function createLuckTable(daYun) {
+  const table = document.createElement("div");
+  table.className = "bazi-luck";
+  daYun.forEach((item) => {
+    const cell = document.createElement("div");
+    if (item.isCurrent) cell.classList.add("is-current");
+    const pillar = document.createElement("strong");
+    pillar.textContent = item.pillar;
+    const years = document.createElement("span");
+    years.textContent = `${item.startYear}–${item.endYear}`;
+    const ages = document.createElement("small");
+    ages.textContent = `${item.startAge}–${item.endAge} 岁`;
+    cell.append(pillar, years, ages);
+    table.append(cell);
+  });
+  return table;
 }
 
 function createDayGuideSection(dayGuide) {

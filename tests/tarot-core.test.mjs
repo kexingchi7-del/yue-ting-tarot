@@ -39,7 +39,9 @@ assert.equal(getEarthlyBranch("23:30").name, "子时");
 assert.equal(getEarthlyBranch("01:00").name, "丑时");
 const baziProfile = buildBaziProfile({ birthDate: "1990-03-21", birthTime: "23:30", cityId: "beijing" });
 assert.equal(baziProfile.branch.name, "子时");
-assert.equal(baziProfile.solarTime.offsetMinutes, -14);
+assert.ok(baziProfile.solarTime.offsetMinutes < -22 && baziProfile.solarTime.offsetMinutes > -23);
+assert.deepEqual(Object.values(baziProfile.chart.pillars).map((item) => item.ganZhi), ["庚午", "己卯", "丙戌", "戊子"]);
+assert.equal(baziProfile.chart.luck.daYun.length, 10);
 assert.ok(baziProfile.summary.includes("北京"));
 const dayGuide = buildDayGuide({ birthDate: "1990-03-21", date: "2026-07-10", focus: "事业" });
 assert.equal(dayGuide.date, "2026-07-10");
@@ -85,7 +87,9 @@ assert.ok(reading.bazi.tarotBridge.length > 0);
 assert.ok(formatReading(reading).includes("牌阵：四象十字"));
 assert.ok(formatReading(reading).includes("星座：摩羯座"));
 assert.ok(formatReading(reading).includes("宜行指数："));
-assert.ok(formatReading(reading).includes("时辰档案："));
+assert.ok(formatReading(reading).includes("八字档案："));
+assert.ok(formatReading(reading).includes("四柱："));
+assert.ok(formatReading(reading).includes("大运："));
 
 const selectedReading = drawReadingFromCardIds({
   cardIds: ["major-0", "权杖-1", "圣杯-2"],
